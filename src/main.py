@@ -69,7 +69,7 @@ try:
   nextstage.setupMqtt()
   #connect and subscribe to local mqtt
   doLocal = True
-  doSleep = False
+  doSleep = True
   if doLocal:
     localmqtt = umqttsimple.MQTTClient("esp32","192.168.0.54",port=1883)
     localmqtt.set_callback(local_recv)
