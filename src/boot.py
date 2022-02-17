@@ -14,8 +14,9 @@ try:
 except OSError as e:
   print(f"connection state is {wlan.isconnected()}")
 
-while wlan.isconnected() == False:
-	print("not connected yet, waiting")
+if wlan.isconnected == False:
+  print("trying again in 5 mins to connect to wifi")
+  machine.deepsleep(300000)
 print("connected to wifi!")
 #import webrepl
 #webrepl.start()

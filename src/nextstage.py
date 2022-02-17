@@ -72,7 +72,7 @@ expectAcks = 0
 # we got an Ack!
 def mqttReceive(topic, msg):
   global expectAcks
-  print(f"from cloud mqtt received : {topic}\n{msg}")
+  print(f"from mqtt received : {topic}\n{msg}")
   data = json.loads(msg.decode("utf8"))
   if expectAcks and data["header"]["method"] == "SETACK":
     expectAcks -= 1
@@ -165,33 +165,41 @@ from machine import Timer
 
 our_timers = {}
 class handleAckTimer():
-  def __init__(self,dur,channel,state,timer_id):
+  def __init__(self,dur,channel,state,timer_id,broker,fake):
     self.timer = Timer(-1)
     self.timer.init(period=dur,mode=Timer.ONE_SHOT,callback=self.cb)
     self.channel = channel
     self.state = state
     self.timer_id = timer_id
+    self.fake = fake
+    self.broker = broker
   def cb(self,timer):
     print("Timer EXPIRED!!!!!!")
     global expectAcks
     #send out another toggle
-    meross_toggle(self.channel,self.state)
+    meross_toggle(self.broker,self.channel,self.state,self.fake)
     #decrement becos the last one is lost, assumed.
     expectAcks -=1
     print(f"Required Acks = {expectAcks}")
-    del our_timers[timer_id]
+    del our_timers[self.timer_id]
   def destroy(self):
     self.timer.deinit()
 
-def meross_toggle(channel,state):
+def meross_toggle(mqttcl,channel,state,fake=False):
   global expectAcks
-  msg = meross_mqtt_build(channel,state)
+  msg = meross_mqtt_build(channel,state,fake)
   #now publish to /appliance/<client_id>/subscribe
-  mqttclient.publish(f"/appliance/{uuid}/subscribe",msg)
-  expectAcks +=1
-  print(f"Required Acks = {expectAcks}")
-  timer_id = randomNonce(16)
-  our_timers[timer_id] = handleAckTimer(3000,channel,state,timer_id)
+  if fake:
+    qqos=1
+  else:
+    qqos=0
+  # {uuid} vs 2007240381412190820648e1e926a731(local)
+  mqttcl.publish(f"/appliance/2007240381412190820648e1e926a731/subscribe",msg,qos=qqos)
+  if not fake:
+    expectAcks +=1
+    print(f"Required Acks = {expectAcks}")
+    timer_id = randomNonce(16)
+    our_timers[timer_id] = handleAckTimer(3000,channel,state,timer_id,mqttcl,fake)
 
 #if you have smart hub
 def meross_hub_list():
@@ -265,14 +273,22 @@ def generate_mqtt_password():
 #f"/app/{user_id}-{app_id}/subscribe"
 
 #requires key, user_id, uuid
-def meross_mqtt_build(channel,state):
+def meross_mqtt_build(channel,state,fake):
   nonce = randomNonce(16)
   messageId = md53.md5sum(nonce.encode("utf8")).lower()
   timestamp = int(round(time.time()))
 
-  strtohash = "%s%s%s" % (messageId, creds["key"], timestamp)
-  signature = md53.md5sum(strtohash.encode("utf8")).lower()
-
+  if not fake:
+    strtohash = "%s%s%s" % (messageId, creds["key"], timestamp)
+    signature = md53.md5sum(strtohash.encode("utf8")).lower()
+  else:
+    strtohash = "%s%s" % (messageId, timestamp)
+    signature = md53.md5sum(strtohash.encode("utf8")).lower()
+    
+    creds = {
+      'user_id' : "fakeid"
+    }
+    app_id = "fakeappid"
   data = {
     "header": {
       "from": f"/app/{creds['user_id']}-{app_id}/subscribe",
@@ -282,8 +298,8 @@ def meross_mqtt_build(channel,state):
       "payloadVersion": 1,
       "sign": signature,  # Example: "b4236ac6fb399e70c3d61e98fcb68b74",
       "timestamp": timestamp,
-      "triggerSrc": "Android",
-      "uuid": uuid
+      #"triggerSrc": "Android",
+      #"uuid": uuid
     },
     "payload": {
       'togglex': {

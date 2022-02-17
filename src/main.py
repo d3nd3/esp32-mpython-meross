@@ -3,16 +3,19 @@ gc.collect()
 
 import time
 
-t=time.gmtime()
-print(f"Time is : {t}")
-if t[0] < 2022:
-  import ntptime
-  ntptime.settime()  # Synchronise the system time using NTP
+#t=time.gmtime()
+#print(f"Time is : {t}")
+#if t[0] < 2022:
+import ntptime
+ntptime.settime()  # Synchronise the system time using NTP
 
 import machine
 import nextstage
 import errno
 import umqttsimple
+import json
+import ssl
+
 #5 mins
 future_try = 300000
 def try_in_future():
@@ -22,8 +25,11 @@ def try_in_future():
 
 got_tablet = False
 got_phone = False
+# listening for battery
+# also now acks because combine cloud into local...
 def local_recv(topic,msg):
   global got_tablet, got_phone
+  
   print(f"locally received : {topic}\n{msg}")
   device = topic.decode("utf8").split("/")[1]
   batt = int(msg)
@@ -38,14 +44,14 @@ def local_recv(topic,msg):
     return
   if batt > 62:
     print(f"turning OFF battery for {device}")
-    nextstage.meross_toggle(channel,False)
+    nextstage.meross_toggle(localmqtt,channel,False,fake=True)
     #sleep(5)
     #nextstage.meross_toggle(channel,False)
     #sleep(5)
 
   elif batt < 38:
     print(f"turning ON battery for {device}")
-    nextstage.meross_toggle(channel,True)
+    nextstage.meross_toggle(localmqtt,channel,True,fake=True)
     #sleep(5)
     #nextstage.meross_toggle(channel,True)
     #sleep(5)
@@ -55,26 +61,36 @@ def local_recv(topic,msg):
 try:
   #client.check_msg()
 
-  print("Logging In...")
-  print()
-  nextstage.meross_log_in()
-  print("Device List...")
-  print()
-  nextstage.meross_device_list()
+  # print("Logging In...")
+  # print()
+  # nextstage.meross_log_in()
+  # print("Device List...")
+  # print()
+  # nextstage.meross_device_list()
   #print("Hub List...")
   #print()
   #nextstage.meross_hub_list()
 
   #connect and subscribe to cloud mqtt
-  nextstage.setupMqtt()
+  #nextstage.setupMqtt()
   #connect and subscribe to local mqtt
   doLocal = True
   doSleep = True
   if doLocal:
-    localmqtt = umqttsimple.MQTTClient("esp32","192.168.0.54",port=1883)
+    # with open('ca.crt') as f:
+    #     ca_data = f.read()
+    localmqtt = umqttsimple.MQTTClient("esp32","192.168.0.54",port=8883,ssl=True)
     localmqtt.set_callback(local_recv)
     localmqtt.connect()
     localmqtt.subscribe("brave/+/battery")
+    localmqtt.publish("brave/esp32/heartbeat",' '.join([str(s) for s in time.gmtime()]),retain=True)
+    localmqtt.publish("brave/esp32/heartbeat",' '.join([str(s) for s in time.gmtime()]),retain=True)
+
+    #nextstage.meross_toggle(localmqtt,4,False,fake=True)
+    #time.sleep(5)
+    #nextstage.meross_toggle(localmqtt,4,True,fake=True)
+
+
   #1 = tablet
   #2 = lamp
   #3 = phone
@@ -86,18 +102,19 @@ try:
 
   #nextstage.mqttclient.wait_msg()
   while True and doLocal:
-    nextstage.mqttclient.check_msg()
+    #nextstage.mqttclient.check_msg()
     localmqtt.check_msg()
 
-    if got_phone and got_tablet and nextstage.expectAcks == 0:
+    if got_phone and got_tablet:
       break
-  print(f"About to destroy timers and sleep/disconect\nexpectacks={nextstage.expectAcks}")
-  for k in nextstage.our_timers:
-    nextstage.our_timers[k].destroy()
+  
+  #print(f"About to destroy timers and sleep/disconect\nexpectacks={nextstage.expectAcks}")
+  #for k in nextstage.our_timers:
+  #  nextstage.our_timers[k].destroy()
 
   if doLocal:
     localmqtt.disconnect()
-  nextstage.mqttclient.disconnect()
+  #nextstage.mqttclient.disconnect()
   """
   last_message = 0
   message_interval = 5

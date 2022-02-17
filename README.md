@@ -5,16 +5,20 @@
 * git clone mqtt explorer
 * edit package.json in src dir to replace --arch x64 with --arch armv7l
 * yarn, yarn build, yarn start
+
 ## Retext viewer
 *  ~/.config/ReText project/ReText.conf
 * defaultPreviewState=live-preview
+
 ## Usb->Uart serial connection
 * dmesg | grep tty
 * screen /dev/ttyUSB0 115200
+
 ## MicroPython WebRepl
 * https://github.com/micropython/webrepl
 * file:///home/pi/esp32/webrepl/webrepl.html#192.168.0.71:8266/
 * No reason to use this, prefer terminal below
+
 ## MicroPython file access via terminal
 ### connecting
 rshell --buffer-size=30 -p '/dev/ttyUSB0' -a  
