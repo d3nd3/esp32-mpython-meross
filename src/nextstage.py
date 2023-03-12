@@ -189,12 +189,9 @@ def meross_toggle(mqttcl,channel,state,fake=False):
   global expectAcks
   msg = meross_mqtt_build(channel,state,fake)
   #now publish to /appliance/<client_id>/subscribe
-  if fake:
-    qqos=1
-  else:
-    qqos=0
+  
   # {uuid} vs 2007240381412190820648e1e926a731(local)
-  mqttcl.publish(f"/appliance/2007240381412190820648e1e926a731/subscribe",msg,qos=qqos)
+  mqttcl.publish(f"/appliance/2007240381412190820648e1e926a731/subscribe",msg)
   if not fake:
     expectAcks +=1
     print(f"Required Acks = {expectAcks}")
