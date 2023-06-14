@@ -21,6 +21,7 @@ import json
 
 #5 mins
 future_try = 300000
+# future_try = 10000
 def try_in_future():
   if doSleep:
    machine.deepsleep(future_try)
@@ -38,12 +39,14 @@ def main_loop():
   start_time = time.time()
   counter = 0
   while True:
-    # calls the callback.
-    localmqtt.check_msg()
-    if (time.time() - start_time) > 10:
-      # tap out after 10 second.
+    try:
+    	# has timeout of 4 seconds
+    	localmqtt.check_msg()
+    except:
+    	pass
+    if (time.time() - start_time) > 20:
+      # tap out after 20 second.
       main_shutdown()
-      sleep(1)
       counter += 1
 
 

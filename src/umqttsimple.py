@@ -17,6 +17,7 @@ class MQTTClient:
             port = 8883 if ssl else 1883
         self.client_id = client_id
         self.sock = None
+        self.timeout = 4.0
         self.server = server
         self.port = port
         self.ssl = ssl
@@ -58,6 +59,7 @@ class MQTTClient:
 
     def connect(self, clean_session=True):
         self.sock = socket.socket()
+        self.settimeout(self.timeout)
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self.sock.connect(addr)
         if self.ssl:
@@ -171,7 +173,7 @@ class MQTTClient:
     # messages processed internally.
     def wait_msg(self):
         res = self.sock.read(1)
-        self.sock.setblocking(True)
+        # self.sock.setblocking(True)
         if res is None:
             return None
         if res == b"":
@@ -205,5 +207,5 @@ class MQTTClient:
     # If not, returns immediately with None. Otherwise, does
     # the same processing as wait_msg.
     def check_msg(self):
-        self.sock.setblocking(False)
+        # self.sock.setblocking(False)
         return self.wait_msg()
