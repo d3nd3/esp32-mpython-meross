@@ -184,6 +184,11 @@ class handleAckTimer():
     del our_timers[self.timer_id]
   def destroy(self):
     self.timer.deinit()
+"""
+channel 0 == all
+1 2 3 4
+5 == usb
+"""
 
 def meross_toggle(mqttcl,channel,state,fake=False):
   global expectAcks
@@ -276,9 +281,11 @@ def meross_mqtt_build(channel,state,fake):
   timestamp = int(round(time.time()))
 
   if not fake:
+  	# hash the key too.
     strtohash = "%s%s%s" % (messageId, creds["key"], timestamp)
     signature = md53.md5sum(strtohash.encode("utf8")).lower()
   else:
+  	# Only hash messageId and timestamp
     strtohash = "%s%s" % (messageId, timestamp)
     signature = md53.md5sum(strtohash.encode("utf8")).lower()
     

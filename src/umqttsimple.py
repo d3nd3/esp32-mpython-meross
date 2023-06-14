@@ -4,6 +4,7 @@ except:
     import socket
 import ustruct as struct
 from ubinascii import hexlify
+import select
 
 
 class MQTTException(Exception):
@@ -17,7 +18,6 @@ class MQTTClient:
             port = 8883 if ssl else 1883
         self.client_id = client_id
         self.sock = None
-        self.timeout = 4.0
         self.server = server
         self.port = port
         self.ssl = ssl
@@ -32,6 +32,16 @@ class MQTTClient:
         self.lw_qos = 0
         self.lw_retain = False
 
+    def timeoutRead(self,num):
+    	if self.didTimeout():
+    		raise OSError
+    	return self.sock.read(num)
+    def didTimeout(self):
+    	poller = select.poll()
+    	poller.register(self.sock, select.POLLIN)
+    	res = poller.poll(4000)  # time in milliseconds
+    	return not res
+
     def _send_str(self, s):
         self.sock.write(struct.pack("!H", len(s)))
         self.sock.write(s)
@@ -40,7 +50,7 @@ class MQTTClient:
         n = 0
         sh = 0
         while 1:
-            b = self.sock.read(1)[0]
+            b = self.timeoutRead(1)[0]
             n |= (b & 0x7f) << sh
             if not b & 0x80:
                 return n
@@ -59,7 +69,6 @@ class MQTTClient:
 
     def connect(self, clean_session=True):
         self.sock = socket.socket()
-        self.settimeout(self.timeout)
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self.sock.connect(addr)
         if self.ssl:
@@ -100,7 +109,7 @@ class MQTTClient:
         if self.user is not None:
             self._send_str(self.user)
             self._send_str(self.pswd)
-        resp = self.sock.read(4)
+        resp = self.timeoutRead(4)
         assert resp[0] == 0x20 and resp[1] == 0x02
         if resp[3] != 0:
             raise MQTTException(resp[3])
@@ -139,9 +148,9 @@ class MQTTClient:
             while 1:
                 op = self.wait_msg()
                 if op == 0x40:
-                    sz = self.sock.read(1)
+                    sz = self.timeoutRead(1)
                     assert sz == b"\x02"
-                    rcv_pid = self.sock.read(2)
+                    rcv_pid = self.timeoutRead(2)
                     rcv_pid = rcv_pid[0] << 8 | rcv_pid[1]
                     if pid == rcv_pid:
                         return
@@ -160,7 +169,7 @@ class MQTTClient:
         while 1:
             op = self.wait_msg()
             if op == 0x90:
-                resp = self.sock.read(4)
+                resp = self.timeoutRead(4)
                 #print(resp)
                 assert resp[1] == pkt[2] and resp[2] == pkt[3]
                 if resp[3] == 0x80:
@@ -172,29 +181,29 @@ class MQTTClient:
     # set by .set_callback() method. Other (internal) MQTT
     # messages processed internally.
     def wait_msg(self):
-        res = self.sock.read(1)
+        res = self.timeoutRead(1)
         # self.sock.setblocking(True)
         if res is None:
             return None
         if res == b"":
             raise OSError(-1)
         if res == b"\xd0":  # PINGRESP
-            sz = self.sock.read(1)[0]
+            sz = self.timeoutRead(1)[0]
             assert sz == 0
             return None
         op = res[0]
         if op & 0xf0 != 0x30:
             return op
         sz = self._recv_len()
-        topic_len = self.sock.read(2)
+        topic_len = self.timeoutRead(2)
         topic_len = (topic_len[0] << 8) | topic_len[1]
-        topic = self.sock.read(topic_len)
+        topic = self.timeoutRead(topic_len)
         sz -= topic_len + 2
         if op & 6:
-            pid = self.sock.read(2)
+            pid = self.timeoutRead(2)
             pid = pid[0] << 8 | pid[1]
             sz -= 2
-        msg = self.sock.read(sz)
+        msg = self.timeoutRead(sz)
         self.cb(topic, msg)
         if op & 6 == 2:
             pkt = bytearray(b"\x40\x02\0\0")
