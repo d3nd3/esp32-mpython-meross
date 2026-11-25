@@ -1,4 +1,6 @@
 
+Prefer pictures? Start with **[HUMANS.md](HUMANS.md)**.
+
 ---
 # d32 esp lolin mqtt auto power
 ## Mqtt Explorer

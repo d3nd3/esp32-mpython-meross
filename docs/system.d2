@@ -1,0 +1,59 @@
+# esp32-mpython-meross — an ESP32 with a 20-second attention span: phone battery in, plug relay out
+# Strokes only (no fills) so the light and dark diagram themes both stay readable.
+direction: right
+grid-columns: 2
+grid-rows: 2
+
+classes: {
+  entry: {style: {stroke: "#4f9cf9"; stroke-width: 2}}
+  core: {style: {stroke: "#9a7cf9"}}
+  state: {style: {stroke: "#e0a44a"}}
+  store: {style: {stroke: "#e0a44a"; stroke-width: 2}}
+  ext: {style: {stroke: "#6ac48a"; stroke-dash: 4}}
+}
+
+entry: Entry points {
+  direction: down
+  boot: "boot.py · every wake: static 192.168.0.71 join, then falls into main.py" {class: entry}
+  failed: "boot.py guard · compares isconnected to False, so the 5 min retry never fires" {class: entry}
+  app: "main.py · NTP time, connect, retained heartbeat twice, subscribe, poll 20 s, sleep" {class: entry}
+  loop: "main_loop · check_msg until 20 s elapsed, then main_shutdown, deepsleep 300 s" {class: entry}
+  dead: "main.py · cloud calls are all commented out, only doLocal=True runs" {class: entry}
+  dev: "dev loop · rsync src over rshell to /pyboard, then ctrl-D soft reboot on ttyUSB0" {class: entry}
+}
+
+external: External {
+  direction: down
+  ap: "home wifi · static address means nothing here answers DHCP" {class: ext}
+  broker: "192.168.0.54:8883 · TLS, no username, no certificate check" {class: ext}
+  phones: "brave/phone/battery and brave/tablet/battery · published by MacroDroid on the devices" {class: ext}
+  plug: "Meross mss425f surge protector · four sockets plus USB on channels 1 to 5" {class: ext}
+  ntp: "ntptime · sets the clock the SET frame timestamp is signed with" {class: ext}
+  meross: "iot.meross.com and mqtt-eu-2 · the abandoned cloud route, unreachable from here" {class: ext}
+}
+
+entry -> core
+core -> state
+core -> external
+core: Core {
+  direction: down
+  recv: "local_recv · topic part 1 is the device, the payload is the battery percent" {class: core}
+  hyst: "local_recv · over 60 turns the relay off, under 40 on, 40 to 60 is left alone" {class: core}
+  map: "local_recv · tablet is channel 1, phone is channel 3, anything else is dropped" {class: core}
+  toggle: "meross_toggle · one ToggleX SET to the hardcoded plug uuid, called twice" {class: core}
+  build: "meross_mqtt_build · header plus togglex payload, md5 sign, epoch seconds" {class: core}
+  fake: "fake=True · signs messageId+timestamp and rewrites creds to fakeid, no ack is counted" {class: core}
+  ack: "handleAckTimer · 3 s one-shot republish, expectAcks minus one, only on the real path" {class: core}
+  cloud: "nextstage login · Base64 params, md5(secret+ts+nonce+params), token and key back" {class: core}
+  derived: "derived ids · app_id md5(API+uuid4), mqtt_pw md5(user_id+key), topic app uid-appid" {class: core}
+}
+
+state: State {
+  direction: down
+  creds: "creds.py · gitignored: lan_ssid, lan_pw, email, password, cached_creds" {class: store; shape: cylinder}
+  flags: "module globals · doLocal, doSleep, expectAcks, our_timers" {class: state}
+  ids: "module globals · client_id, app_id, mqtt_pw, uuid, creds, overwritten by fake sends" {class: state}
+  cert: "ca.crt and flash/cert/ca.pem · self-signed CN=LOQMQTT, referenced by no live code" {class: store; shape: cylinder}
+  forget: "no NVS write · deep sleep wipes RAM, only broker-retained heartbeat outlives a cycle" {class: state}
+}
+
